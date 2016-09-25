@@ -4,11 +4,8 @@ import numpy as np
 
 VALIDATION_SIZE = 2000
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_integer('regular', '1',
-                            """if use regularization to prevent overfittingm. 0 = not use""")
+tf.app.flags.DEFINE_integer('regular', '0', """if use regularization to prevent overfitting. 0 = not use""")
 LEARNING_RATE = 1e-4
-
-
 
 
 def split_data():
@@ -28,30 +25,43 @@ def split_data():
 
 
 def inference(datas):
-    number_nn_1 = 5
-    w1 = weight_variable([784, number_nn_1])
-    b1 = bias_variable([number_nn_1])
+    kernel_size1 = [5, 5, 1, 32]
+    kernel_size2 = [5, 5, 32, 64]
 
-    hidden1 = tf.nn.sigmoid(tf.matmul(datas, w1) + b1)
+    w1 = weight_variable(kernel_size1)
+    b1 = bias_variable([32])
+    conv1 = tf.nn.relu(conv(tf.reshape(datas,[-1,28,28,1]),w1)+b1)
+    hpool1 = max_pool_2x2(conv1)
 
-    w2 = weight_variable([number_nn_1, 10])
-    b2 = bias_variable([10])
+    w2 = weight_variable(kernel_size2)
+    b2 = bias_variable([64])
+    conv2 = tf.nn.relu(conv(hpool1,w2)+b2)
+    hpool2 = max_pool_2x2(conv2)
 
-    labels = tf.nn.softmax(tf.matmul(hidden1, w2) + b2)
-    if (FLAGS.regular):regularizer = regular(w2,b2)
+    w3 = weight_variable([7*7*64, 1024])
+    b3 = bias_variable([1024])
+    fc3 = tf.nn.dropout(tf.nn.relu( tf.matmul(tf.reshape(hpool2,[-1,7*7*64]), w3)+b3),0.5)
+
+
+
+    w4 = weight_variable([1024, 10])
+    b4 = bias_variable([10])
+
+
+
+    labels = tf.nn.softmax(tf.matmul(fc3, w4) + b4)
+
+    if FLAGS.regular:
+        regularizer = regularizers = (tf.nn.l2_loss(w3)+tf.nn.l2_loss(b3) + tf.nn.l2_loss(w4) + tf.nn.l2_loss(b4))
     else:
         regularizer = 0
-    return labels,regularizer
+    return labels, regularizer
 
 
-def regular(weights,biases):
-    return tf.nn.l2_loss(weights) + tf.nn.l2_loss(biases)
-
-
-def loss(model_labels, labels,regularizers):
+def loss(model_labels, labels, regularizers):
     loss = tf.reduce_sum(tf.square(model_labels - labels))
-    if (regularizers != 0):
-        loss += 5e-4 *  regularizers
+    if regularizers != 0:
+        loss += 5e-4 * regularizers
     return loss
 
 
@@ -110,3 +120,7 @@ def get_batch(batch_size, train_images, train_labels, index_in_epoch, epochs_com
 
 def max_pool_2x2(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+
+
+def conv(datas, parameter):
+    return tf.nn.conv2d(datas, parameter, strides=[1, 1, 1, 1], padding='SAME')
